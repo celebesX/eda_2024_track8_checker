@@ -44,10 +44,8 @@
 #define FLUTE_LOCAL_REFINEMENT 1      // Suggestion: Set to 1 if ACCURACY >= 5
 #define FLUTE_REMOVE_DUPLICATE_PIN 0  // Remove dup. pin for flute_wl() & flute()
 
-//#define FLUTE_POWVFILE "/home/public/FLUTE_LIB/POWV9.dat"  // LUT for POWV (Wirelength Vector)
-//#define FLUTE_POSTFILE "/home/public/FLUTE_LIB/POST9.dat"  // LUT for POST (Steiner Tree)
-#define FLUTE_POWVFILE "../FLUTE_LIB/powv9.dat"
-#define FLUTE_POSTFILE "../FLUTE_LIB/post9.dat"
+#define FLUTE_POWVFILE "/home/public/FLUTE_LIB/POWV9.dat"  // LUT for POWV (Wirelength Vector)
+#define FLUTE_POSTFILE "/home/public/FLUTE_LIB/POST9.dat"  // LUT for POST (Steiner Tree)
 
 #define FLUTE_D 9                   // LUT is used for d <= FLUTE_D, FLUTE_D <= 9
 
