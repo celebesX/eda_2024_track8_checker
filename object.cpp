@@ -35,7 +35,7 @@ bool Tile::matchType(const std::string& modelType) {
   return tileTypes.find(matchType) != tileTypes.end();
 }
 
-bool Tile::addInstance(int instID, int offset, std::string modelType) {
+bool Tile::addInstance(int instID, int offset, std::string modelType, const bool isBaseline) {
   if (matchType(modelType) == false) {        
     std::cout << "Error: " << getLocStr() << " " << modelType <<" instance " << instID << ", type mismatch with tile type" << std::endl;
     return false;
@@ -54,7 +54,11 @@ bool Tile::addInstance(int instID, int offset, std::string modelType) {
     return false;
   }
 
-  mapIter->second[offset]->addInstance(instID);
+  if (isBaseline){
+    mapIter->second[offset]->addBaselineInstance(instID);
+  } else {
+    mapIter->second[offset]->addOptimizedInstance(instID);
+  }
   return true;
 }
 
@@ -62,6 +66,22 @@ void Tile::clearInstances() {
   for (auto& pair : instanceMap) {
     for (auto& slot : pair.second) {
       slot->clearInstances();
+    }
+  }
+}
+
+void Tile::clearBaselineInstances() {
+  for (auto& pair : instanceMap) {
+    for (auto& slot : pair.second) {
+      slot->clearBaselineInstances();
+    }
+  }
+}
+
+void Tile::clearOptimizedInstances() {
+  for (auto& pair : instanceMap) {
+    for (auto& slot : pair.second) {
+      slot->clearOptimizedInstances();
     }
   }
 }
@@ -82,87 +102,232 @@ void Tile::reportTile() {
   }
   std::cout << "  Tile " << getLocStr() << " type: " << typeStr << std::endl;
   
-  std::cout << "  " << lineBreaker << std::endl;
+  std::cout << "  " << std::string(55, '-') << std::endl;
   std::cout << "  " << std::left << std::setw(15) << "Slot";
-  std::cout << std::setw(15) << "| Occupied";
+  std::cout << std::setw(32) << "| Occupied(baseline, optimized)";
   std::cout << std::setw(15) << "| Total" << std::endl;
-  std::cout << "  " << lineBreaker << std::endl;
+  std::cout << "  " << std::string(55, '-') << std::endl;
 
   for (auto& pair : instanceMap) {
-    int occupiedSlotCnt = 0;
+    std::pair<int, int> occupiedSlotCnt = std::make_pair(0, 0);
     for (unsigned int i = 0; i < pair.second.size(); i++) {
-      if (pair.second[i]->getInstances().size() > 0) {
-        occupiedSlotCnt++;
+      if (pair.second[i]->getBaselineInstances().size() > 0) {
+        occupiedSlotCnt.first++;
+      }
+      if (pair.second[i]->getOptimizedInstances().size() > 0) {
+        occupiedSlotCnt.second++;
       }
     }  
     std::cout <<"  " << std::left << std::setw(15) << pair.first;
-    std::cout <<"| " << std::setw(13) << occupiedSlotCnt;
+    std::string printStr = "( " + std::to_string(occupiedSlotCnt.first) + ", " + std::to_string(occupiedSlotCnt.second) + " )";
+    std::cout <<"| " << std::setw(30) << printStr;
     std::cout <<"| " << std::setw(13) << pair.second.size() << std::endl;        
   }
-  std::cout << "  " << lineBreaker << std::endl;
+  
+  std::cout << "  " << std::string(55, '-') << std::endl;
   std::cout << std::endl;
 
   // more detailed information w.r.t occupation
   for (auto& pair : instanceMap) {    
     for (unsigned int i = 0; i < pair.second.size(); i++) {
-      if (pair.second[i]->getInstances().size() == 0) {
+      if (pair.second[i]->getBaselineInstances().size() == 0 && 
+          pair.second[i]->getOptimizedInstances().size() == 0) {
         continue;
       }
-      std::cout << "  " << pair.first << " #" << i << std::endl;      
-      for (auto instID : pair.second[i]->getInstances()) {
-        if (glbInstMap.find(instID) == glbInstMap.end()) {
-          std::cout << "Error: Instance Inst_" << instID << ", not found in the global instance map" << std::endl;
-        } else {                    
-          Instance* instPtr = glbInstMap[instID];
-          std::cout << "    inst_"<< instID << " " << instPtr->getModelName() << std::endl;
+      std::cout << "  " << pair.first << " #" << i << " (baseline, optimized)"<< std::endl;      
+
+      std::list<int> baselineInstArr = pair.second[i]->getBaselineInstances();
+      std::list<int> optimizedInstArr = pair.second[i]->getOptimizedInstances();
+
+      // print two columns
+      // left one is baseline instances
+      // right one is optimized instances
+      // if two list with different size, print "-" for empty item
+      auto baselineIt = baselineInstArr.begin();
+      auto optimizedIt = optimizedInstArr.begin();
+      while (baselineIt != baselineInstArr.end() || optimizedIt != optimizedInstArr.end()) {
+        std::cout << "    ";
+        
+        // Print baseline instance
+        if (baselineIt != baselineInstArr.end()) {
+          int instID = *baselineIt;
+          if (glbInstMap.find(instID) != glbInstMap.end()) {
+            Instance* instPtr = glbInstMap[instID];
+            std::cout << std::left << std::setw(20) << ("inst_" + std::to_string(instID) + " " + instPtr->getModelName());
+          } else {
+            std::cout << std::left << std::setw(20) << "Error: Instance not found";
+          }
+          ++baselineIt;
+        } else {
+          std::cout << std::setw(20) << "-";
         }
+        
+        std::cout << " | ";
+        
+        // Print optimized instance
+        if (optimizedIt != optimizedInstArr.end()) {
+          int instID = *optimizedIt;
+          if (glbInstMap.find(instID) != glbInstMap.end()) {
+            Instance* instPtr = glbInstMap[instID];
+            std::cout << std::left << std::setw(30) << ("inst_" + std::to_string(instID) + " " + instPtr->getModelName());
+          } else {
+            std::cout << std::left << std::setw(30) << "Error: Instance not found";
+          }
+          ++optimizedIt;
+        } else {
+          std::cout << std::left << std::setw(20) << "-";
+        }
+        
+        std::cout << std::endl;
       }
     }
   }
   std::cout << std::endl;
 
   // report pin utilization
-  std::set<int> inpinSet = getConnectedLutSeqInput();
-  std::set<int> outpinSet = getConnectedLutSeqOutput();
+  std::set<int> baselineInpinSet = getConnectedLutSeqInput(true);
+  std::set<int> optimizedInpinSet = getConnectedLutSeqInput(false);  
 
   std::cout << "  Detailed pin utilization:" << std::endl;
-  std::cout << "    Input nets:" << std::endl;
-  for (auto netID : inpinSet) {
-    std::cout << "      net_" << netID << std::endl;
+  std::cout << "    Input nets: Baseline " << baselineInpinSet.size() << "/" << MAX_TILE_PIN_INPUT_COUNT;
+  std::cout << ", Optimized " << optimizedInpinSet.size() << "/" << MAX_TILE_PIN_INPUT_COUNT << std::endl;
+   
+  // print left baseline netID, right optimized netID, padding with "-" is not exist
+  auto baselineNetIt = baselineInpinSet.begin();
+  auto optimizedNetIt = optimizedInpinSet.begin();
+  while (baselineNetIt != baselineInpinSet.end() || optimizedNetIt != optimizedInpinSet.end()) {
+    std::cout << "      ";
+    if (baselineNetIt != baselineInpinSet.end()) {      
+      std::cout << std::left << std::setw(15) << ("net_" + std::to_string(*baselineNetIt));
+      ++baselineNetIt;
+    } else {
+      std::cout << std::left << std::setw(15) << "-";
+    }
+    std::cout << " | ";
+    if (optimizedNetIt != optimizedInpinSet.end()) {
+      std::cout << std::left << std::setw(15) << ("net_" + std::to_string(*optimizedNetIt));
+      ++optimizedNetIt;
+    } else {
+      std::cout << std::left << std::setw(15) << "-";
+    }
+    std::cout << std::endl;
   }
-  std::cout << "    Output nets:" << std::endl;
-  for (auto netID : outpinSet) {
-    std::cout << "      net_" << netID << std::endl;
-  }
+
+  // print output pin utilization
   std::cout << std::endl;
-  
+  std::set<int> baselineOutpinSet = getConnectedLutSeqOutput(true);
+  std::set<int> optimizedOutpinSet = getConnectedLutSeqOutput(false);
+
+  std::cout << "  Detailed output pin utilization:" << std::endl;
+  std::cout << "    Output nets: Baseline " << baselineOutpinSet.size() << "/" << MAX_TILE_PIN_OUTPUT_COUNT;
+  std::cout << ", Optimized " << optimizedOutpinSet.size() << "/" << MAX_TILE_PIN_OUTPUT_COUNT << std::endl;
+   
+  // print left baseline netID, right optimized netID, padding with "-" is not exist
+  baselineNetIt = baselineOutpinSet.begin();
+  optimizedNetIt = optimizedOutpinSet.begin();
+  while (baselineNetIt != baselineOutpinSet.end() || optimizedNetIt != optimizedOutpinSet.end()) {
+    std::cout << "      ";
+    if (baselineNetIt != baselineOutpinSet.end()) {      
+      std::cout << std::left << std::setw(15) << ("net_" + std::to_string(*baselineNetIt));
+      ++baselineNetIt;
+    } else {
+      std::cout << std::left << std::setw(15) << "-";
+    }
+    std::cout << " | ";
+    if (optimizedNetIt != optimizedOutpinSet.end()) {
+      std::cout << std::left << std::setw(15) << ("net_" + std::to_string(*optimizedNetIt));
+      ++optimizedNetIt; 
+    } else {
+      std::cout << std::left << std::setw(15) << "-";
+    }
+    std::cout << std::endl;
+  }
+
   // report control set
+  std::cout << std::endl;
   std::cout << "  Detailed control set:" << std::endl;
   for (int bank = 0; bank < 2; bank++) {
-    std::set<int> clkNets;
-    std::set<int> ceNets;
-    std::set<int> srNets;
-    getControlSet(bank, clkNets, ceNets, srNets);
-    std::cout << "    Bank " << bank << std::endl;
-    
-    if (clkNets.size() > 0) {
-      std::cout << "      Clock nets:" << std::endl;
-      for (auto netID : clkNets) {
-        std::cout << "        net_" << netID << std::endl;
+    std::set<int> baselineClkNets;
+    std::set<int> baselineCeNets;
+    std::set<int> baselineSrNets;
+    getControlSet(true, bank, baselineClkNets, baselineCeNets, baselineSrNets);   
+
+    std::set<int> optimizedClkNets;
+    std::set<int> optimizedCeNets;
+    std::set<int> optimizedSrNets;
+    getControlSet(false, bank, optimizedClkNets, optimizedCeNets, optimizedSrNets);   
+
+    std::cout << "    Bank " << bank << std::endl;    
+    if (baselineClkNets.size() > 0 || optimizedClkNets.size() > 0) {
+      std::cout << "      Clock nets: baseline = " << baselineClkNets.size() << ", optimized = " << optimizedClkNets.size() << std::endl;
+      auto baselineClkNetIt = baselineClkNets.begin();
+      auto optimizedClkNetIt = optimizedClkNets.begin();
+      while (baselineClkNetIt != baselineClkNets.end() || optimizedClkNetIt != optimizedClkNets.end()) {
+        std::cout << "        ";
+        if (baselineClkNetIt != baselineClkNets.end()) {
+          std::cout << std::left << std::setw(15) << ("net_" + std::to_string(*baselineClkNetIt));
+          ++baselineClkNetIt;
+        } else {
+          std::cout << std::left << std::setw(15) << "-";
+        }        
+        std::cout << " | ";
+
+        if (optimizedClkNetIt != optimizedClkNets.end()) {
+          std::cout << std::left << std::setw(15) << ("net_" + std::to_string(*optimizedClkNetIt));
+          ++optimizedClkNetIt;
+        } else {
+          std::cout << std::left << std::setw(15) << "-";
+        }
+        std::cout << std::endl;
+      }
+    }    
+
+    if (baselineSrNets.size() > 0 || optimizedSrNets.size() > 0) {
+      std::cout << "      Reset nets: baseline = " << baselineSrNets.size() << ", optimized = " << optimizedSrNets.size() << std::endl;
+      auto baselineSrNetIt = baselineSrNets.begin();
+      auto optimizedSrNetIt = optimizedSrNets.begin();
+      while (baselineSrNetIt != baselineSrNets.end() || optimizedSrNetIt != optimizedSrNets.end()) {
+        std::cout << "        ";
+        if (baselineSrNetIt != baselineSrNets.end()) {
+          std::cout << std::left << std::setw(15) << ("net_" + std::to_string(*baselineSrNetIt));
+          ++baselineSrNetIt;  
+        } else {
+          std::cout << std::left << std::setw(15) << "-";
+        }
+        std::cout << " | ";
+        if (optimizedSrNetIt != optimizedSrNets.end()) {
+          std::cout << std::left << std::setw(15) << ("net_" + std::to_string(*optimizedSrNetIt));
+          ++optimizedSrNetIt;
+        } else {
+          std::cout << std::left << std::setw(15) << "-";
+        }
+        std::cout << std::endl;
       }
     }
-    if (srNets.size() > 0) {
-      std::cout << "      Reset nets:" << std::endl;
-      for (auto netID : srNets) {
-        std::cout << "        net_" << netID << std::endl;
+
+    if (baselineCeNets.size() > 0 || optimizedCeNets.size() > 0) {
+      std::cout << "      CE nets: baseline = " << baselineCeNets.size() << ", optimized = " << optimizedCeNets.size() << std::endl;
+      auto baselineCeNetIt = baselineCeNets.begin();
+      auto optimizedCeNetIt = optimizedCeNets.begin();
+      while (baselineCeNetIt != baselineCeNets.end() || optimizedCeNetIt != optimizedCeNets.end()) {
+        std::cout << "        ";
+        if (baselineCeNetIt != baselineCeNets.end()) {
+          std::cout << std::left << std::setw(15) << ("net_" + std::to_string(*baselineCeNetIt));
+          ++baselineCeNetIt;
+        } else {
+          std::cout << std::left << std::setw(15) << "-";
+        }
+        std::cout << " | ";
+        if (optimizedCeNetIt != optimizedCeNets.end()) {
+          std::cout << std::left << std::setw(15) << ("net_" + std::to_string(*optimizedCeNetIt));
+          ++optimizedCeNetIt;
+        } else {
+          std::cout << std::left << std::setw(15) << "-";
+        }
+        std::cout << std::endl;
       }
     }
-    if (ceNets.size() > 0) {
-      std::cout << "      CE nets:" << std::endl;
-      for (auto netID : ceNets) {
-        std::cout << "        net_" << netID << std::endl;
-      }
-    }
+    std::cout << std::endl;
   }
 }
 
@@ -278,18 +443,28 @@ bool Tile::initTile(const std::string& tileType) {
   return true;
 }
 
-bool Tile::isEmpty() {
+bool Tile::isEmpty(bool isBaseline) {
   for (auto& pair : instanceMap) {
     for (auto& slot : pair.second) {
-      if (!slot->getInstances().empty()) {
-        return false;
+      // skip ippin
+      if(pair.first == "IPPIN"){
+        continue;
+      }
+      if (isBaseline) {
+        if (!slot->getBaselineInstances().empty()) {
+          return false;
+        }
+      } else {
+        if (!slot->getOptimizedInstances().empty()) {
+          return false;
+        }
       }
     }
   }
   return true;
 }
 
-std::set<int> Tile::getConnectedLutSeqInput() {    
+std::set<int> Tile::getConnectedLutSeqInput(bool isBaseline) {    
   std::set<int> netSet;  // using set to merge identical nets
   if (matchType("PLB") == false) {
     return netSet;
@@ -303,7 +478,12 @@ std::set<int> Tile::getConnectedLutSeqInput() {
     }
 
     for (auto slot : mapIter.second) {
-      std::list<int> instArr = slot->getInstances();
+      std::list<int> instArr;
+      if (isBaseline) {
+        instArr = slot->getBaselineInstances();
+      } else {
+        instArr = slot->getOptimizedInstances();
+      }
       for (auto instID : instArr) {
         if (glbInstMap.find(instID) == glbInstMap.end()) {
           std::cout << "Error: Instance ID " << instID << " not found in the global instance map" << std::endl;
@@ -346,7 +526,7 @@ std::set<int> Tile::getConnectedLutSeqInput() {
   return netSet;
 }
 
-std::set<int> Tile::getConnectedLutSeqOutput() {
+std::set<int> Tile::getConnectedLutSeqOutput(bool isBaseline) {
   std::set<int> netSet;
   if (matchType("PLB") == false) {
     return netSet;
@@ -359,7 +539,12 @@ std::set<int> Tile::getConnectedLutSeqOutput() {
     }
 
     for (auto slot : mapIter.second) {
-      std::list<int> instArr = slot->getInstances();
+      std::list<int> instArr;
+      if (isBaseline) {
+        instArr = slot->getBaselineInstances();
+      } else {
+        instArr = slot->getOptimizedInstances();
+      }
       for (auto instID : instArr) {
         if (glbInstMap.find(instID) == glbInstMap.end()) {
           std::cout << "Error: Instance ID " << instID << " not found in the global instance map" << std::endl;
@@ -380,7 +565,7 @@ std::set<int> Tile::getConnectedLutSeqOutput() {
             continue;
           }
           Net* netPtr = glbNetMap[netID];
-          if (netPtr->getProp() == NET_PROP_INTRA_TILE) {
+          if (netPtr->isIntraTileNet(isBaseline)) {
             continue;
           }
           netSet.insert(netID);    
@@ -392,6 +577,7 @@ std::set<int> Tile::getConnectedLutSeqOutput() {
 }
 
 bool Tile::getControlSet(
+  const bool isBaseline,
   const int bank,
   std::set<int> &clkNets,
   std::set<int> &ceNets,
@@ -420,7 +606,12 @@ bool Tile::getControlSet(
 
     for (int slotIdx = startIdx; slotIdx <= endIdx; slotIdx++) {        
       Slot* slotPtr = mapIter.second[slotIdx];
-      std::list<int> instArr = slotPtr->getInstances();      
+      std::list<int> instArr;
+      if (isBaseline) {
+        instArr = slotPtr->getBaselineInstances();
+      } else {
+        instArr = slotPtr->getOptimizedInstances();
+      }
       for (auto instID : instArr) {
         if (glbInstMap.find(instID) == glbInstMap.end()) {
           std::cout << "Error: Instance ID " << instID << " not found in the global instance map" << std::endl;
@@ -541,6 +732,35 @@ void Instance::createOutpins() {
   }
 }
 
+bool Net::isIntraTileNet(bool isBaseline) {
+  if (inpin == nullptr) {
+    return false;
+  }
+  Instance* driverInstPtr = inpin->getInstanceOwner();
+  std::tuple<int, int, int> driverLoc;
+  if (isBaseline) {
+    driverLoc = driverInstPtr->getBaseLocation();
+  } else {
+    driverLoc = driverInstPtr->getLocation();
+  }
+
+  for (const auto* outpin : getOutputPins()) {
+    Instance* sinkInstPtr = outpin->getInstanceOwner();
+    std::tuple<int, int, int> sinkLoc;
+    if (isBaseline) {
+      sinkLoc = sinkInstPtr->getBaseLocation();
+    } else {
+      sinkLoc = sinkInstPtr->getLocation();
+    }
+    if (std::get<0>(driverLoc) != std::get<0>(sinkLoc) || 
+        std::get<1>(driverLoc) != std::get<1>(sinkLoc) ||
+        std::get<2>(driverLoc) != std::get<2>(sinkLoc)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 int Net::getNumPins() {
   if(inpin != nullptr) {
     return outputPins.size() + 1;
@@ -615,41 +835,67 @@ bool Net::addConnection(std::string conn) {
   }
 }
 
-int Net::getCritWireLength() {
+int Net::getCritWireLength(bool isBaseline) {
   int wirelength = 0;
   const Pin* driverPin = getInpin();
   if (!driverPin) {
     return 0;  // Return 0 if there's no driver pin
   }
 
-  const auto& driverLoc = driverPin->getInstanceOwner()->getLocation();
+  std::tuple<int, int, int> driverLoc;
+  if (isBaseline) {
+    driverLoc = driverPin->getInstanceOwner()->getBaseLocation();
+  } else {
+    driverLoc = driverPin->getInstanceOwner()->getLocation();
+  }
 
+  std::set<std::pair<int, int>> mergedPinLocs;  // merge identical pin locations
   for (const auto* outpin : getOutputPins()) {
     if (!outpin->getTimingCritical()) {
       continue;
     }
-    const auto& sinkLoc = outpin->getInstanceOwner()->getLocation();
-    wirelength += std::abs(std::get<0>(sinkLoc) - std::get<0>(driverLoc)) +
-                  std::abs(std::get<1>(sinkLoc) - std::get<1>(driverLoc));
+    std::tuple<int, int, int> sinkLoc;
+    if (isBaseline) {
+      sinkLoc = outpin->getInstanceOwner()->getBaseLocation();
+    } else {
+      sinkLoc = outpin->getInstanceOwner()->getLocation();
+    }
+    mergedPinLocs.insert(std::make_pair(std::get<0>(sinkLoc), std::get<1>(sinkLoc)));
+  }
+
+  for (auto loc : mergedPinLocs) {
+    wirelength += std::abs(std::get<0>(loc) - std::get<0>(driverLoc)) +
+                  std::abs(std::get<1>(loc) - std::get<1>(driverLoc));
   }
 
   return wirelength;
 }
 
-void Net::getMergedNonCritPinLocs(std::vector<int>& xCoords, std::vector<int>& yCoords) {
+void Net::getMergedNonCritPinLocs(bool isBaseline, std::vector<int>& xCoords, std::vector<int>& yCoords) {
   const Pin* driverPin = getInpin();
   if (!driverPin) {
     return;
   }
   std::set<std::pair<int, int>> rsmtPinLocs;
-  const auto& driverLoc = driverPin->getInstanceOwner()->getLocation();
+  
+  std::tuple<int, int, int> driverLoc;
+  if (isBaseline) {
+    driverLoc = driverPin->getInstanceOwner()->getBaseLocation();
+  } else {
+    driverLoc = driverPin->getInstanceOwner()->getLocation();
+  }
   rsmtPinLocs.insert(std::make_pair(std::get<0>(driverLoc), std::get<1>(driverLoc)));
   
   for (const auto* outpin : getOutputPins()) {
     if (outpin->getTimingCritical()) {
       continue;
     }
-    const auto& sinkLoc = outpin->getInstanceOwner()->getLocation();
+    std::tuple<int, int, int> sinkLoc;
+    if (isBaseline) {
+      sinkLoc = outpin->getInstanceOwner()->getBaseLocation();
+    } else {
+      sinkLoc = outpin->getInstanceOwner()->getLocation();
+    }
     rsmtPinLocs.insert(std::make_pair(std::get<0>(sinkLoc), std::get<1>(sinkLoc)));
   }
   for(auto loc : rsmtPinLocs) {
@@ -658,7 +904,7 @@ void Net::getMergedNonCritPinLocs(std::vector<int>& xCoords, std::vector<int>& y
   }
 }
 
-int Net::getNonCritWireLength() {
+int Net::getNonCritWireLength(bool isBaseline) {
   const Pin* driverPin = getInpin();
   if (!driverPin) {
     return 0;  // Return 0 if there's no driver pin
@@ -666,7 +912,7 @@ int Net::getNonCritWireLength() {
 
   std::vector<int> xCoords;
   std::vector<int> yCoords;
-  getMergedNonCritPinLocs(xCoords, yCoords);
+  getMergedNonCritPinLocs(isBaseline, xCoords, yCoords);
 
   if (xCoords.size() > 1) {
     Tree mst = rsmt.fltTree(xCoords, yCoords);
@@ -681,15 +927,15 @@ bool Net::reportNet() {
   if (isClock()) {
     propStr = "clock";
   }
-  if(getProp() == NET_PROP_INTRA_TILE){
+
+  if (this->isIntraTileNet(false)) {  // report optimized net property
     if (propStr.empty()) {
-        propStr = "intra_tile";
+      propStr = "intra_tile";
     } else {
-        propStr += "| intra_tile";
+      propStr += "| intra_tile";
     }
   }
   
-
   std::cout << "  net_" << id << " " << propStr << std::endl;
 
   int numNonCritFanoutPins = 0;
@@ -702,25 +948,24 @@ bool Net::reportNet() {
     }
   }
   std::cout << "    Number of critical fanout pins: " << numCritFanoutPins << std::endl;
-  std::cout << "    Critical wirelength = " << getCritWireLength() << std::endl;
-  std::cout << std::endl;  
   std::cout << "    Number of non-critical fanout pins: " << numNonCritFanoutPins << std::endl;  
-  int nonCritWirelength = getNonCritWireLength();
-  std::cout << "    Non-critical wirelength = " << nonCritWirelength << std::endl;  
+  std::cout << std::endl;  
+  std::cout << "    Critical wirelength: Baseline = " << getCritWireLength(true) << "; Optimized = " << getCritWireLength(false) << std::endl;  
+  std::cout << "    Non-critical wirelength: Baseline = " << getNonCritWireLength(true) << "; Optimized = " << getNonCritWireLength(false) << std::endl;  
   std::cout << std::endl;
-    
-  if (nonCritWirelength > 0) {
+      
+  // if (nonCritWirelength > 0) {
 
-    std::vector<int> xCoords;
-    std::vector<int> yCoords;
-    getMergedNonCritPinLocs(xCoords, yCoords);
+  //   std::vector<int> xCoords;
+  //   std::vector<int> yCoords;
+  //   getMergedNonCritPinLocs(xCoords, yCoords);
 
-    std::cout << "    Net Rectilinear Steiner Minimum Tree with " << xCoords.size() << " merged locations." << std::endl;
-    if (xCoords.size() > 1) {
-      Tree mst = rsmt.fltTree(xCoords, yCoords);
-      rsmt.printtree(mst);
-    }
-  }
+  //   std::cout << "    Net Rectilinear Steiner Minimum Tree with " << xCoords.size() << " merged locations." << std::endl;
+  //   if (xCoords.size() > 1) {
+  //     Tree mst = rsmt.fltTree(xCoords, yCoords);
+  //     rsmt.printtree(mst);
+  //   }
+  // }
 
   return true;
 }

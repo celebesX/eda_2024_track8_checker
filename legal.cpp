@@ -4,29 +4,41 @@
 #include "object.h"
 
 bool legalCheck() {
-  for (int i = 0; i < chip.getNumCol(); i++) {
-    for (int j = 0; j < chip.getNumRow(); j++) {
-      Tile* tile = chip.getTile(i, j);
-      tile->clearInstances();
-    }
-  }
  
   int numErrors = 0;
-
   std::cout << "  1.1 Check instance location and tile capacity." << std::endl;
-  if (checkTypeAndCapacity() == false) {
+  if (checkTypeAndCapacity(true) == false) {
     numErrors++;
+  } else {
+    std::cout << "        Baseline placement passed capacity check." << std::endl;
+  }  
+  if (checkTypeAndCapacity(false) == false) {
+    numErrors++;
+  } else {
+    std::cout << "        Optimized placement passed capacity check." << std::endl;
   }
 
   std::cout << "  1.2 Check control set constraint." << std::endl;
-  if (checkControlSet() == false) {
+  std::cout << "        Baseline placement:" << std::endl;
+  if (checkControlSet(true) == false) {
+    std::cout << "        Baseline placement passed control set check." << std::endl;
+    numErrors++;
+  }
+  std::cout << "        Optimized placement:" << std::endl;
+  if (checkControlSet(false) == false) {
+    std::cout << "        Optimized placement passed control set check." << std::endl;
     numErrors++;
   }
 
   std::cout << "  1.3 Check clock region constraint." << std::endl;
-  if (checkClockRegion() == false) {
+  std::cout << "        Baseline placement:" << std::endl;
+  if (checkClockRegion(true) == false) {
     numErrors++;
-  }
+  } 
+  std::cout << "        Optimized placement:" << std::endl;
+  if (checkClockRegion(false) == false) {
+    numErrors++;
+  } 
 
   if (numErrors > 0) {
     std::cout << "  LegalCheck failed with " << numErrors << " errors." << std::endl;
@@ -37,16 +49,8 @@ bool legalCheck() {
   }
 }
 
-bool checkTypeAndCapacity() {
+bool checkTypeAndCapacity(bool isBaseline) {
   int errorCount = 0;
-
-  for (auto inst : glbInstMap) {
-    std::tuple<int, int, int> loc = inst.second->getLocation();
-    Tile* tile = chip.getTile(std::get<0>(loc), std::get<1>(loc));
-    if (tile->addInstance(inst.first, std::get<2>(loc), inst.second->getModelName()) == false)  {
-      errorCount++;
-    }        
-  }
 
   // check tile capacity
   int overflowTileCount = 0;
@@ -65,7 +69,12 @@ bool checkTypeAndCapacity() {
             continue;
           }
           // check if the slot is legally occupied
-          std::list<int> instances = slot->getInstances();                    
+          std::list<int> instances;
+          if (isBaseline) {
+            instances = slot->getBaselineInstances();
+          } else {
+            instances = slot->getOptimizedInstances();
+          }
           if (instances.size() > 1) {
             // 1) 2-LUTs are allowed but total number of input should not exceed 6
             if (modelType == "LUT") {
@@ -92,7 +101,7 @@ bool checkTypeAndCapacity() {
           } else {
             // check DRAM and lut
             if (modelType == "DRAM") {
-              if (slot->getInstances().empty()) {
+              if (slot->getOptimizedInstances().empty()) {
                 continue;
               }
               // DRAM at slot0 blocks lut slot 0~3
@@ -101,14 +110,14 @@ bool checkTypeAndCapacity() {
               if (idx == 0) {
                 for (int lutIdx = 0; lutIdx < 4; lutIdx++) {
                   Slot* lutSlot = (*lutSlotArr)[lutIdx];
-                  if (lutSlot->getInstances().size() > 0) {
+                  if (lutSlot->getOptimizedInstances().size() > 0) {
                     overflow.push_back(std::pair<std::string, int>("LUT-DRAM", lutIdx));
                   }
                 }
               } else if (idx == 1) {
                 for (int lutIdx = 4; lutIdx < 8; lutIdx++) {
                   Slot* lutSlot = (*lutSlotArr)[lutIdx];
-                  if (lutSlot->getInstances().size() > 0) {
+                  if (lutSlot->getOptimizedInstances().size() > 0) {
                     overflow.push_back(std::pair<std::string, int>("LUT-DRAM", lutIdx));
                   }
                 }
@@ -138,7 +147,7 @@ bool checkTypeAndCapacity() {
   }    
 }
 
-bool checkControlSet() {    
+bool checkControlSet(bool isBaseline) {    
   // Return true if the control set is valid, otherwise return false
   int errorCount = 0;
 
@@ -161,7 +170,7 @@ bool checkControlSet() {
         std::set<int> clkNets;
         std::set<int> ceNets;
         std::set<int> srNets;
-        if (tile->getControlSet(bank, clkNets, ceNets, srNets) == false) {             
+        if (tile->getControlSet(isBaseline, bank, clkNets, ceNets, srNets) == false) {             
           errorCount++;
         }
 
@@ -210,35 +219,26 @@ bool checkControlSet() {
     }
   }
 
-  // print stat 
-  std::cout << "        Checked control set on " << tileCount << " tiles." << std::endl;
-  std::cout << "          Clock:" <<std::endl;
-  for (const auto& pair : tileClkCount) {
-    std::cout << "            " << pair.second << " tiles have " << pair.first << " clock ";
-    if (pair.first > 1) {
-      std::cout << "nets." << std::endl;
-    } else {
-      std::cout << "net." << std::endl;
-    }        
-  }
-  std::cout << "          CE:" <<std::endl;
-  for (const auto& pair : tileCeCount) {
-    std::cout << "            " << pair.second << " tiles have " << pair.first << " ce ";
-    if (pair.first > 1) {
-      std::cout << "nets." << std::endl;
-    } else {
-      std::cout << "net." << std::endl;
+  // print stat in table format
+  std::cout << "          Checked control set on " << tileCount << " tiles." << std::endl;
+  std::cout << "          Control Set Statistics(tile count v.s number of control nets):" << std::endl;
+  std::cout << "          ---------------------------------------" << std::endl;
+  std::cout << "          |       |  0  |  1  |  2  |  3  |  4  |" << std::endl;
+  std::cout << "          ---------------------------------------" << std::endl;
+
+  auto printRow = [&](const std::string& label, const std::map<int, int>& countMap) {
+    std::cout << "          | " << std::left << std::setw(5) << label << " |";
+    for (int i = 0; i <= 4; ++i) {
+      int count = countMap.count(i) ? countMap.at(i) : 0;
+      std::cout << std::setw(5) << count << "|";
     }
-  }
-  std::cout << "          Reset:" <<std::endl;
-  for (const auto& pair : tileResetCount) {
-    std::cout << "            " << pair.second << " tiles have " << pair.first << " reset ";
-    if (pair.first > 1) {
-      std::cout << "nets." << std::endl;
-    } else {
-      std::cout << "net." << std::endl;
-    }
-  }
+    std::cout << std::endl;
+  };
+
+  printRow("Clock", tileClkCount);
+  printRow("Reset", tileResetCount);
+  printRow("CE", tileCeCount);
+  std::cout << "          ---------------------------------------" << std::endl;
 
   if (errorCount > 0) {
     return false;
@@ -247,7 +247,7 @@ bool checkControlSet() {
   }   
 }
 
-bool checkClockRegion() {    
+bool checkClockRegion(bool isBaseline) {    
   // Return true if the clock region is valid, otherwise return false
   int errorCount = 0;
   
@@ -260,8 +260,15 @@ bool checkClockRegion() {
   }
 
   for (auto inst : glbInstMap) {
-    int instCol  = std::get<0>(inst.second->getLocation());
-    int instRow  = std::get<1>(inst.second->getLocation());
+    int instCol;
+    int instRow;
+    if (isBaseline) {
+      instCol  = std::get<0>(inst.second->getBaseLocation());
+      instRow  = std::get<1>(inst.second->getBaseLocation());
+    } else {
+      instCol  = std::get<0>(inst.second->getLocation());
+      instRow  = std::get<1>(inst.second->getLocation());
+    }    
     int clockCol = -1;
     int clockRow = -1;
     if (chip.getClockRegionCoordinate(instCol, instRow, clockCol, clockRow) == false) {
@@ -299,7 +306,7 @@ bool checkClockRegion() {
   // report clock region
   int overflowRegionCount = 0;
   for (int j = chip.getNumClockRow() - 1; j >=0 ; j--) {
-    std::cout << "        | ";
+    std::cout << "          | ";
     for (int i = 0; i < chip.getNumClockCol(); i++) {
       ClockRegion* clockRegion = chip.getClockRegion(i, j);
       std::cout << std::left << std::setw(2) << clockRegion->getNumClockNets() <<"| ";
@@ -310,11 +317,11 @@ bool checkClockRegion() {
     std::cout << std::endl;
   }
 
-  if (overflowRegionCount == 0) {
-    std::cout << "        All clock regions passed legal check." << std::endl;
-  } else {
+  if (overflowRegionCount > 0) {    
     std::cout << "Error: " << overflowRegionCount << " clock regions have more than " << MAX_REGION_CLOCK_COUNT << " clock nets." << std::endl;
     errorCount++;
+  } else {
+    std::cout << "          All clock regions passed legal check." << std::endl;
   }    
 
   if (errorCount > 0) {
@@ -325,11 +332,21 @@ bool checkClockRegion() {
 }
 
 void reportClockRegion(const int col, const int row) {
-  checkClockRegion();
 
+  std::cout << "  Baseline:" << std::endl;
+  checkClockRegion(true);  // report baseline placement
   // report a specific clock region
   ClockRegion* clockRegion = chip.getClockRegion(col, row);
   if (clockRegion) {
-    clockRegion->reportClockRegion();
+    clockRegion->reportClockRegion();  // report optimized placement
   }
+  std::cout << std::endl;
+
+  std::cout << "  Optimized:" << std::endl;
+  checkClockRegion(false);  // report optimized placement
+  // report a specific clock region
+  clockRegion = chip.getClockRegion(col, row);
+  if (clockRegion) {
+    clockRegion->reportClockRegion();  // report optimized placement
+  }  
 }

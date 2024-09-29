@@ -38,17 +38,13 @@ enum PinProp {
     PIN_PROP_CLOCK
 };
 
-enum NetProp {
-    NET_PROP_NONE,
-    NET_PROP_INTRA_TILE   // all pins are in same tile  
-};
-
 class Slot {
     private:
         // normally each slot is holding 1 instance
         // the exception is the LUT slot can hold up to 2 LUTs
         // with shared inputs 
-        std::list<int> instArr;
+        std::list<int> optimizedInstArr;  // container of the optimized design instances
+        std::list<int> baselineInstArr;   // container of the input design instances
     public:
         // Constructor
         Slot() {}
@@ -56,10 +52,15 @@ class Slot {
         ~Slot() {}
 
         // Getter and setter for type
-        void clearInstances() {instArr.clear();}
+        void clearInstances() {optimizedInstArr.clear(); baselineInstArr.clear();}
+        void clearBaselineInstances() {baselineInstArr.clear();}
+        void clearOptimizedInstances() {optimizedInstArr.clear();}
 
-        void addInstance(int instID) { instArr.push_back(instID); }
-        std::list<int> getInstances() const { return instArr; }
+        void addOptimizedInstance(int instID) { optimizedInstArr.push_back(instID); }
+        std::list<int> getOptimizedInstances() const { return optimizedInstArr; }
+
+        void addBaselineInstance(int instID) { baselineInstArr.push_back(instID); }
+        std::list<int> getBaselineInstances() const { return baselineInstArr; }
 };
 
 typedef std::vector<Slot*> slotArr;
@@ -69,7 +70,9 @@ class Tile {
         int col;
         int row;
         std::set<std::string> tileTypes;
-        std::map<std::string, slotArr> instanceMap;  // record instances belone to this tile
+
+        // container to record instances belone to this tile
+        std::map<std::string, slotArr> instanceMap;
 
     public:
         // Constructor
@@ -94,21 +97,24 @@ class Tile {
         bool initTile(const std::string& tileType);  // allocate slots
         bool matchType(const std::string& modelType); // LUT/SEQ to PLB
 
-        bool isEmpty();        
-        bool addInstance(int instID, int offset, std::string modelType);        
+        bool isEmpty(bool isBaseline);        
+        bool addInstance(int instID, int offset, std::string modelType, const bool isBaseline);          
         void clearInstances();
+        void clearBaselineInstances();
+        void clearOptimizedInstances();
         std::map<std::string, slotArr>::iterator getInstanceMapBegin() { return instanceMap.begin(); }
         std::map<std::string, slotArr>::iterator getInstanceMapEnd() { return instanceMap.end(); }
         slotArr* getInstanceByType (std::string type);
         
         bool getControlSet(
+            const bool isBaseline,
             const int bank,
             std::set<int> &clkNets,
             std::set<int> &ceNets,
             std::set<int> &srNets);
         
-        std::set<int> getConnectedLutSeqInput();
-        std::set<int> getConnectedLutSeqOutput();
+        std::set<int> getConnectedLutSeqInput(bool isBaseline);
+        std::set<int> getConnectedLutSeqOutput(bool isBaseline);
 
         // report util
         void reportTile();
@@ -272,13 +278,12 @@ public:
 
 class Net {
     int id; // 声明 id 成员变量
-    bool clock; // 声明 clock 成员变量
-    NetProp prop; // 声明 prop 成员变量
+    bool clock; // 声明 clock 成员变量    
     Pin* inpin;
     std::list<Pin*> outputPins;
 
 public:
-    Net(int netID) : id(netID), clock(false), prop(NET_PROP_NONE), inpin(nullptr) {} // 默认构造函数
+    Net(int netID) : id(netID), clock(false), inpin(nullptr) {} // 默认构造函数
     ~Net() {} // 析构函数
 
     // Getter and setter for id
@@ -288,10 +293,9 @@ public:
     bool isClock() const { return clock; }
     void setClock(bool value) { clock = value; }
 
-    // Getter and setter for prop
-    NetProp getProp() const { return prop; }
-    void setProp(NetProp value) { prop = value; }
-
+    // as named, is this net fanin and all fanouts are in the same tile
+    bool isIntraTileNet(bool isBaseline); 
+    
     // Getter and setter for inpin
     Pin* getInpin() const { return inpin; }
     void setInpin(Pin* pin) { inpin = pin; }
@@ -304,9 +308,9 @@ public:
 
     bool addConnection(std::string conn);
 
-    int getCritWireLength();    
-    void getMergedNonCritPinLocs(std::vector<int>& xCoords, std::vector<int>& yCoords);  
-    int getNonCritWireLength();       
+    int getCritWireLength(bool isBaseline);    
+    void getMergedNonCritPinLocs(bool isBaseline, std::vector<int>& xCoords, std::vector<int>& yCoords);  
+    int getNonCritWireLength(bool isBaseline);       
 
     // report util   
     bool reportNet();

@@ -89,10 +89,20 @@ bool readInputNodes(const std::string& fileName) {
     return false;
   }
 
+  // clear all baseline instances in all tiles 
+  for (int i = 0; i < chip.getNumCol(); i++) {
+    for (int j = 0; j < chip.getNumRow(); j++) {
+      Tile* tile = chip.getTile(i, j);
+      // new input netlist is being read, clear all existing instances in the tile
+      tile->clearInstances();   
+    }
+  }
+
   // Parse the location string to extract the coordinates
   std::regex locationRegex("X(\\d+)Y(\\d+)Z(\\d+)");
 
   std::string line;    
+  int errCnt = 0;
   while (std::getline(inputFile, line)) {        
     if (line.empty() || line[0] == '#') {
       continue;
@@ -120,10 +130,9 @@ bool readInputNodes(const std::string& fileName) {
       x = std::stoi(match[1]);
       y = std::stoi(match[2]);
       z = std::stoi(match[3]);
-      // Process the extracted coordinates
-      // TODO: Add your code here
     } else {
-      std::cout << "Invalid location format: " << location << std::endl;
+      std::cout << "Error: Invalid location format: " << location << std::endl;
+      errCnt++;
     }
 
     int instID = -1;
@@ -133,12 +142,14 @@ bool readInputNodes(const std::string& fileName) {
       // Convert the second substring to an integer
       instID = std::stoi(subStr);
     } else {
-      std::cout << "Invalid name format: " << name << std::endl;
+      std::cout << "Error: Invalid name format: " << name << std::endl;
+      errCnt++;
     }
      
     // Check if the instance already exists in the map
     if (glbInstMap.find(instID) != glbInstMap.end()) {
-      std::cout << "Instance with name " << name << " already exists in the map." << std::endl;
+      std::cout << "Error: Instance with name " << name << " already exists in the map." << std::endl;
+      errCnt++;
       continue; // Skip adding the instance to the map
     }
     
@@ -146,8 +157,9 @@ bool readInputNodes(const std::string& fileName) {
     Lib* libPtr = nullptr;
     auto libIt = glbLibMap.find(type);
     if (libIt == glbLibMap.end()) {
-      std::cout << "Library with name " << type << " not found." << std::endl;
-      continue; // Skip adding the instance to the map
+      std::cout << "Error: Library with name " << type << " not found." << std::endl;
+      errCnt++;
+      continue; 
     } else {
       libPtr = libIt->second;
     }
@@ -160,9 +172,24 @@ bool readInputNodes(const std::string& fileName) {
     newInstance->setFixed(isFixed);
     newInstance->setCellLib(libPtr);
     glbInstMap[instID] = newInstance;
+
+    // add the instance to the corresponding tile
+    Tile* tilePtr = chip.getTile(x, y);
+    if (tilePtr != nullptr) {
+      // add baseline coordinate
+      if (tilePtr->addInstance(instID, z, type, true) == false) {
+        std::cout << "Error: Failed to add baseline coordinate for instance " << name << std::endl;
+        return false;
+      } 
+    }
   }
   inputFile.close();
-  return true;
+
+  if (errCnt > 0) {
+    return false;
+  } else {
+    return true;
+  }
 }
 
 bool readOutputNetlist(const std::string& fileName) {
@@ -171,6 +198,14 @@ bool readOutputNetlist(const std::string& fileName) {
   if (!inputFile.is_open()) {
     std::cout << "Failed to open file: " << fileName << std::endl;
     return false;
+  }
+
+  // clear existing optimized instances in all tiles 
+  for (int i = 0; i < chip.getNumCol(); i++) {
+    for (int j = 0; j < chip.getNumRow(); j++) {
+      Tile* tile = chip.getTile(i, j);      
+      tile->clearOptimizedInstances();   
+    }
   }
 
   // Parse the location string to extract the coordinates
@@ -227,6 +262,15 @@ bool readOutputNetlist(const std::string& fileName) {
     }
     // Add the new instance object to the instMap
     mIt->second->setLocation(std::make_tuple(x, y, z));
+
+    Tile* tilePtr = chip.getTile(x, y);
+    if (tilePtr != nullptr) {
+      // add optimized coordinate
+      if (tilePtr->addInstance(instID, z, type, false) == false) {
+        std::cout << "Error: Failed to add optimized coordinate for instance " << name << std::endl;
+        return false;
+      } 
+    }
   }
   inputFile.close();
 
@@ -352,24 +396,7 @@ bool readInputNets(const std::string& fileName) {
           newNet->setClock(true);
         }
       } 
-
-      Instance* driverInstPtr = newNet->getInpin()->getInstanceOwner();
-      std::tuple<int, int, int> driverLoc = driverInstPtr->getBaseLocation();
-      bool isIntraTile = true;
-      // check if all fanout pins are in the same tile
-      for (auto pin : newNet->getOutputPins()) {
-        Instance* fanoutInstPtr = pin->getInstanceOwner();
-        std::tuple<int, int, int> fanoutLoc = fanoutInstPtr->getBaseLocation();
-        if (std::get<0>(driverLoc) != std::get<0>(fanoutLoc) || 
-            std::get<1>(driverLoc) != std::get<1>(fanoutLoc)) {
-          isIntraTile = false;
-          break;
-        }
-      }
-      if (isIntraTile) {
-        newNet->setProp(NET_PROP_INTRA_TILE);
-      } 
-      
+     
       // Add the new Net object to the netMap
       glbNetMap[netID] = newNet;
     }
@@ -448,7 +475,8 @@ bool reportDesignStatistics() {
       group = "grp7: >1000 pins";      
     }
     netCountByGroup[group]++;
-    if (net.second->getProp() == NET_PROP_INTRA_TILE) {
+    if (net.second->isIntraTileNet(true)) { 
+      // report baseline net property
       numIntraNet++;
     }
     if (net.second->isClock()) {

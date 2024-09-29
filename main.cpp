@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
       return 1;
   }
 
-  std::cout << "Track-8 Checker V0.2" << std::endl;
+  std::cout << "Track-8 Checker V0.3" << std::endl;
   std::cout << std::endl;
 
   bool result = true;
@@ -100,11 +100,11 @@ int main(int argc, char* argv[]) {
       } else if (tokens[0] == "report_design") {
           reportDesignStatistics();
       } else if (tokens[0] == "legal_check") {
-          result = legalCheck();
+          result = legalCheck();          
       } else if (tokens[0] == "report_wirelength") {
           reportWirelength();
       } else if (tokens[0] == "report_pin_density") {
-          reportPinDensity();
+          reportPinDensity();            
       } else if (tokens[0] == "report_clock_region") {
           if (tokens.size() != 3) {
               std::cout << "Invalid format of " << command << std::endl;

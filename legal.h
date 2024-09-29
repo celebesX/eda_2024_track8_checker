@@ -7,8 +7,8 @@
 
 bool legalCheck();  // check tile type and capacity 
 
-bool checkTypeAndCapacity();
-bool checkControlSet();
-bool checkClockRegion();
+bool checkTypeAndCapacity(bool isBaseline);
+bool checkControlSet(bool isBaseline);
+bool checkClockRegion(bool isBaseline);
 
 void reportClockRegion(const int col, const int row);
