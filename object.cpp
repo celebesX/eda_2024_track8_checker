@@ -513,7 +513,12 @@ std::set<int> Tile::getConnectedLutSeqInput(bool isBaseline) {
           // only count pins driven by nets from other tile
           if (netPtr->getInpin() != nullptr) {
             Instance* driverInstPtr = netPtr->getInpin()->getInstanceOwner();
-            std::tuple<int, int, int> driverLoc = driverInstPtr->getLocation();
+            std::tuple<int, int, int> driverLoc;
+            if (isBaseline) {
+              driverLoc = driverInstPtr->getBaseLocation();
+            } else {
+              driverLoc = driverInstPtr->getLocation();
+            }
             if (std::get<0>(driverLoc) == col && std::get<1>(driverLoc) == row) {
               continue;
             }
@@ -753,8 +758,7 @@ bool Net::isIntraTileNet(bool isBaseline) {
       sinkLoc = sinkInstPtr->getLocation();
     }
     if (std::get<0>(driverLoc) != std::get<0>(sinkLoc) || 
-        std::get<1>(driverLoc) != std::get<1>(sinkLoc) ||
-        std::get<2>(driverLoc) != std::get<2>(sinkLoc)) {
+        std::get<1>(driverLoc) != std::get<1>(sinkLoc)) {
       return false;
     }
   }

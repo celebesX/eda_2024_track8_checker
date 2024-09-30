@@ -5,7 +5,9 @@
 
 bool reportPinDensity() {  
   int checkedTileCnt = 0;
-  std::multimap<double, Tile*> pinDensityMap;
+
+  // 1) baseline
+  std::multimap<double, Tile*> baselinePinDensityMap;  
   for (int i = 0; i < chip.getNumCol(); i++) {
       for (int j = 0; j < chip.getNumRow(); j++) {
           Tile* tile = chip.getTile(i, j);
@@ -19,7 +21,7 @@ bool reportPinDensity() {
           // baseline
           int numInterTileConn = tile->getConnectedLutSeqInput(true).size() + tile->getConnectedLutSeqOutput(true).size();          
           double ratio = (double)(numInterTileConn) / (MAX_TILE_PIN_INPUT_COUNT + MAX_TILE_PIN_OUTPUT_COUNT);
-          pinDensityMap.insert(std::pair<double, Tile*>(ratio, tile));            
+          baselinePinDensityMap.insert(std::pair<double, Tile*>(ratio, tile));            
           checkedTileCnt++;
       }
   }
@@ -27,8 +29,7 @@ bool reportPinDensity() {
 
   std::cout << "  Baseline: " << std::endl;
   std::cout << "    Checked pin density on " << checkedTileCnt <<" tiles; top 5% count = " << top5Pct << " tiles." << std::endl;
-  //std::cout << "    List of top 5% congested tiles:" << std::endl;
-
+  
   int top5PctCnt = 0;
   double totalPct = 0.0;
   // print some statistics in table  
@@ -37,7 +38,7 @@ bool reportPinDensity() {
 
   std::cout << "    Location | Input  | Output | Pin Density %" << std::endl;
   const int printCnt = 10;  
-  for (auto it = pinDensityMap.rbegin(); it != pinDensityMap.rend(); it++) {
+  for (auto it = baselinePinDensityMap.rbegin(); it != baselinePinDensityMap.rend(); it++) {
       Tile* tile = it->second;
       double ratio = it->first * 100.0;                
       // convert ratio to percentage        
@@ -66,6 +67,26 @@ bool reportPinDensity() {
   std::cout << "    Baseline top 5% congested tiles (" << top5Pct << " tiles) avg. pin density: " << std::setprecision(2) << avgPct << "%" << std::endl;
   std::cout << std::endl;
 
+  // 2) optimized
+  checkedTileCnt = 0;
+  std::multimap<double, Tile*> optimizedPinDensityMap;
+    for (int i = 0; i < chip.getNumCol(); i++) {
+      for (int j = 0; j < chip.getNumRow(); j++) {
+          Tile* tile = chip.getTile(i, j);
+          if (tile->matchType("PLB") == false) {
+              continue;        
+          }
+          if (tile->isEmpty(false)) {  // optimized
+            continue;
+          }
+
+          // optimized
+          int numInterTileConn = tile->getConnectedLutSeqInput(false).size() + tile->getConnectedLutSeqOutput(false).size();          
+          double ratio = (double)(numInterTileConn) / (MAX_TILE_PIN_INPUT_COUNT + MAX_TILE_PIN_OUTPUT_COUNT);
+          optimizedPinDensityMap.insert(std::pair<double, Tile*>(ratio, tile));                      
+          checkedTileCnt++;
+      }
+  }
   std::cout << "  Optimized: " << std::endl;
   std::cout << "    Checked pin density on " << checkedTileCnt <<" tiles." << std::endl;
 
@@ -77,7 +98,7 @@ bool reportPinDensity() {
   std::cout << "    " << lineBreaker << std::endl;
 
   std::cout << "    Location | Input  | Output | Pin Density %" << std::endl;  
-  for (auto it = pinDensityMap.rbegin(); it != pinDensityMap.rend(); it++) {
+  for (auto it = optimizedPinDensityMap.rbegin(); it != optimizedPinDensityMap.rend(); it++) {
       Tile* tile = it->second;
       double ratio = it->first * 100.0;                
       // convert ratio to percentage        

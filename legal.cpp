@@ -101,7 +101,9 @@ bool checkTypeAndCapacity(bool isBaseline) {
           } else {
             // check DRAM and lut
             if (modelType == "DRAM") {
-              if (slot->getOptimizedInstances().empty()) {
+              if (isBaseline && slot->getBaselineInstances().empty()) {
+                continue;
+              } else if (!isBaseline && slot->getOptimizedInstances().empty()) {
                 continue;
               }
               // DRAM at slot0 blocks lut slot 0~3
@@ -110,14 +112,18 @@ bool checkTypeAndCapacity(bool isBaseline) {
               if (idx == 0) {
                 for (int lutIdx = 0; lutIdx < 4; lutIdx++) {
                   Slot* lutSlot = (*lutSlotArr)[lutIdx];
-                  if (lutSlot->getOptimizedInstances().size() > 0) {
+                  if (isBaseline && lutSlot->getBaselineInstances().size() > 0) {
+                    overflow.push_back(std::pair<std::string, int>("LUT-DRAM", lutIdx));
+                  } else if (!isBaseline && lutSlot->getOptimizedInstances().size() > 0) {
                     overflow.push_back(std::pair<std::string, int>("LUT-DRAM", lutIdx));
                   }
                 }
               } else if (idx == 1) {
                 for (int lutIdx = 4; lutIdx < 8; lutIdx++) {
                   Slot* lutSlot = (*lutSlotArr)[lutIdx];
-                  if (lutSlot->getOptimizedInstances().size() > 0) {
+                  if (isBaseline && lutSlot->getBaselineInstances().size() > 0) {
+                    overflow.push_back(std::pair<std::string, int>("LUT-DRAM", lutIdx));
+                  } else if (!isBaseline && lutSlot->getOptimizedInstances().size() > 0) {
                     overflow.push_back(std::pair<std::string, int>("LUT-DRAM", lutIdx));
                   }
                 }
