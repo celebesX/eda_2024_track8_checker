@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
       return 1;
   }
 
-  std::cout << "Track-8 Checker V0.4" << std::endl;
+  std::cout << "Track-8 Checker V0.5" << std::endl;
   std::cout << std::endl;
 
   bool result = true;

@@ -20,14 +20,17 @@ bool legalCheck() {
 
   std::cout << "  1.2 Check control set constraint." << std::endl;
   std::cout << "        Baseline placement:" << std::endl;
-  if (checkControlSet(true) == false) {
+  if (checkControlSet(true) == false) {    
+    numErrors++;
+  } else{
     std::cout << "        Baseline placement passed control set check." << std::endl;
-    numErrors++;
   }
+  
   std::cout << "        Optimized placement:" << std::endl;
-  if (checkControlSet(false) == false) {
-    std::cout << "        Optimized placement passed control set check." << std::endl;
+  if (checkControlSet(false) == false) {  
     numErrors++;
+  } else {
+    std::cout << "        Optimized placement passed control set check." << std::endl;
   }
 
   std::cout << "  1.3 Check clock region constraint." << std::endl;
@@ -49,9 +52,7 @@ bool legalCheck() {
   }
 }
 
-bool checkTypeAndCapacity(bool isBaseline) {
-  int errorCount = 0;
-
+bool checkTypeAndCapacity(bool isBaseline) {  
   // check tile capacity
   int overflowTileCount = 0;
   for (int i = 0; i < chip.getNumCol(); i++) {
@@ -146,7 +147,7 @@ bool checkTypeAndCapacity(bool isBaseline) {
     } // end for each row
   } // end for each column
 
-  if (errorCount > 0) {
+  if (overflowTileCount > 0) {
     return false;
   } else {
     return true;
