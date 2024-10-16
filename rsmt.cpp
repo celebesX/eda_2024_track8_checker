@@ -138,6 +138,7 @@ void RecSteinerMinTree::readLUTfiles() {
         if (p == nullptr) {
             continue;
         }
+        memTracker_.push_back(p);   // for memory release
 
         SteinerLut_[d][k] = p;
         for (i = 1; i <= ns; i++) {
@@ -218,6 +219,14 @@ void RecSteinerMinTree::deleteLUT() {
 void RecSteinerMinTree::deleteLUT(
     LUT_TYPE &LUT,
     NUMSOLN_TYPE &numsoln) {
+  
+  for (auto csolnPtr : memTracker_) {
+    if (csolnPtr != nullptr) {
+      free(csolnPtr);
+    }
+  }
+  memTracker_.clear();
+
   for (int d = 4; d <= FLUTE_D; d++) {
     delete [] LUT[d];
     delete [] numsoln[d];

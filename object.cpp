@@ -920,7 +920,9 @@ int Net::getNonCritWireLength(bool isBaseline) {
 
   if (xCoords.size() > 1) {
     Tree mst = rsmt.fltTree(xCoords, yCoords);
-    return rsmt.wirelength(mst);
+    int wirelength = rsmt.wirelength(mst);
+    rsmt.free_tree(mst);
+    return wirelength;
   } else {
     return 0;
   }  

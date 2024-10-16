@@ -130,6 +130,8 @@ class RecSteinerMinTree {
   LUT_TYPE SteinerLut_;    // *LUT[FLUTE_D + 1][MGROUP];  storing 4 .. FLUTE_D
   NUMSOLN_TYPE numSoln_; // numsoln[FLUTE_D + 1][MGROUP];
 
+  std::list<struct csoln *> memTracker_;   // to avoid double free of 
+
  public:
   RecSteinerMinTree();
   ~RecSteinerMinTree();
