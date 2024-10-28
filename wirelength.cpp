@@ -41,8 +41,8 @@ bool getOptimizedWirelength(int& critWireLength, int& nonCritWireLength) {
     if (net->isClock()) {
       continue;
     }
-    critWireLength += net->getCritWireLength(true);   // isBaseline = true
-    nonCritWireLength += net->getNonCritWireLength(true);    
+    critWireLength += net->getCritWireLength(false);   // isBaseline = true
+    nonCritWireLength += net->getNonCritWireLength(false);    
   }
 
   return true;
@@ -57,8 +57,8 @@ bool getBaselineWirelength(int& critWireLength, int& nonCritWireLength) {
     if (net->isClock()) {
       continue;
     }
-    critWireLength += net->getCritWireLength(false);   // isBaseline = false
-    nonCritWireLength += net->getNonCritWireLength(false);    
+    critWireLength += net->getCritWireLength(true);   // isBaseline = false
+    nonCritWireLength += net->getNonCritWireLength(true);    
   }
 
   return true;
