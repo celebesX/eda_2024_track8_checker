@@ -7,6 +7,7 @@
 #include "pindensity.h"
 #include "global.h"
 #include "rsmt.h"
+#include "score.h"
 
 int main(int argc, char* argv[]) {
   if (argc != 2) {
@@ -19,7 +20,7 @@ int main(int argc, char* argv[]) {
       return 1;
   }
 
-  std::cout << "Track-8 Checker V0.6" << std::endl;
+  std::cout << "Track-8 Checker V0.7" << std::endl;
   std::cout << std::endl;
 
   bool result = true;
@@ -154,6 +155,15 @@ int main(int argc, char* argv[]) {
                   }
               }
           } 
+      } else if (tokens[0] == "report_score") {
+          if (tokens.size() != 3) {
+            std::cout << "Invalid format of " << command << std::endl;
+            std::cout << "Usage: report_score <best_crit> <best_non_crit>" << std::endl;
+          } else {
+            int best_crit = std::stoi(tokens[1]);
+            int best_non_crit = std::stoi(tokens[2]);
+            reportScore(best_crit, best_non_crit);
+          }
       } else if (tokens[0] == "exit") {
           break;
       } else {

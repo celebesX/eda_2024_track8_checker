@@ -3,7 +3,7 @@
 #include "object.h"
 #include "pindensity.h"
 
-bool reportPinDensity() {  
+bool reportPinDensity() {
   int checkedTileCnt = 0;
 
   // 1) baseline
@@ -129,4 +129,83 @@ bool reportPinDensity() {
   std::cout << std::endl;
 
   return true;      
+}
+
+bool getPinDensity(int& top5Pct, double& baselinePinDensity, double& optimizedPinDensity) {
+
+  int checkedTileCnt = 0;
+
+  ///////////////////////////////////////
+  // 1) baseline
+  ///////////////////////////////////////
+  std::multimap<double, Tile*> baselinePinDensityMap;  
+  for (int i = 0; i < chip.getNumCol(); i++) {
+    for (int j = 0; j < chip.getNumRow(); j++) {
+      Tile* tile = chip.getTile(i, j);
+      if (tile->matchType("PLB") == false) {
+        continue;        
+      }
+      if (tile->isEmpty(true)) {  // baseline
+        continue;
+      }
+
+      // baseline
+      int numInterTileConn = tile->getConnectedLutSeqInput(true).size() + tile->getConnectedLutSeqOutput(true).size();          
+      double ratio = (double)(numInterTileConn) / (MAX_TILE_PIN_INPUT_COUNT + MAX_TILE_PIN_OUTPUT_COUNT);
+      baselinePinDensityMap.insert(std::pair<double, Tile*>(ratio, tile));            
+      checkedTileCnt++;
+    }
+  }
+  top5Pct = checkedTileCnt * 0.05;
+
+  int top5PctCnt = 0;
+  double totalPct = 0.0;
+  for (auto it = baselinePinDensityMap.rbegin(); it != baselinePinDensityMap.rend(); it++) {    
+    double ratio = it->first * 100.0;                
+    // convert ratio to percentage        
+    if (top5PctCnt < top5Pct) {      
+      totalPct += ratio;
+      top5PctCnt++;
+    } else {
+      break;
+    }
+  }
+  baselinePinDensity = totalPct / top5Pct;
+
+  ///////////////////////////////////////
+  // Optimized
+  ///////////////////////////////////////
+  std::multimap<double, Tile*> optimizedPinDensityMap;
+    for (int i = 0; i < chip.getNumCol(); i++) {
+      for (int j = 0; j < chip.getNumRow(); j++) {
+        Tile* tile = chip.getTile(i, j);
+        if (tile->matchType("PLB") == false) {
+          continue;        
+        }
+        if (tile->isEmpty(false)) {  // optimized
+          continue;
+        }
+
+        // optimized
+        int numInterTileConn = tile->getConnectedLutSeqInput(false).size() + tile->getConnectedLutSeqOutput(false).size();          
+        double ratio = (double)(numInterTileConn) / (MAX_TILE_PIN_INPUT_COUNT + MAX_TILE_PIN_OUTPUT_COUNT);
+        optimizedPinDensityMap.insert(std::pair<double, Tile*>(ratio, tile));                                
+      }
+  }
+
+  top5PctCnt = 0;
+  totalPct = 0.0;
+  for (auto it = optimizedPinDensityMap.rbegin(); it != optimizedPinDensityMap.rend(); it++) {    
+    double ratio = it->first * 100.0;                
+    // convert ratio to percentage        
+    if (top5PctCnt < top5Pct) {         
+      totalPct += ratio;
+      top5PctCnt++;
+    } else {
+      break;
+    }
+  }
+  optimizedPinDensity = totalPct / top5Pct;
+
+  return true;
 }

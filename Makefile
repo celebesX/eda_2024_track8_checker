@@ -1,4 +1,4 @@
-SRC = global.cpp util.cpp rsmt.cpp arch.cpp lib.cpp object.cpp netlist.cpp legal.cpp wirelength.cpp pindensity.cpp main.cpp
+SRC = global.cpp util.cpp rsmt.cpp arch.cpp lib.cpp object.cpp netlist.cpp legal.cpp wirelength.cpp pindensity.cpp score.cpp main.cpp
 OBJ = $(SRC:.cpp=.o)
 CC = g++
 
